@@ -1,6 +1,7 @@
 import os
 import glob
 import numpy as np
+from PIL import Image
 import xml.etree.ElementTree as ET
 
 import torch
@@ -10,8 +11,9 @@ image_directory = 'VOC2012/JPEGImages'
 label_directory = 'VOC2012/Annotations'
 
 class VOCDataset(Dataset):
-    def __init__(self, image_directory, label_directory, verbose=False):
+    def __init__(self, image_directory, label_directory, multi_instance=False, verbose=False):
         self.verbose = verbose
+        self.multi_instance = multi_instance
         self.image_directory = image_directory
         self.label_directory = label_directory
         self.labels_dict = self.get_labels_dict()
@@ -22,8 +24,35 @@ class VOCDataset(Dataset):
         return len(data)
 
     def __getitem__(self, idx):
-        pass
+        
         # how to do multilabel balancing?
+
+        # return an image, and a set of labels
+        # can either return all labels, as in multi-label, multi instance
+        # or multi-label, single instance (use np.unique)
+
+        # end goal is to still predict multi-label, conditioned on >=1 instances
+        # of the class in the input image.
+
+        # therefore, any additional instances must serve to increase the likelihood of
+        # predicting that class!
+
+    
+        image = self._load_image(self.data[idx]['image_path'])
+
+        if self.multi_instance:
+            labels = self.data[idx]['labels']
+
+        else:
+            labels = list(np.unique(self.data[idx]['labels']))
+
+        image.show()
+        print(labels)
+
+    def _load_image(self, image_path):
+        img = Image.open(image_path)
+        assert(img.mode == 'RGB')
+        return img
 
     def plot_classes(self):
         import matplotlib.pyplot as plt
@@ -37,7 +66,7 @@ class VOCDataset(Dataset):
     def _count_classes(self):
         count_dict = {x: 0 for x in self.get_labels_dict()}
         for pairs in self.data:
-            for label_list in pairs.values():
+            for label_list in pairs['labels']:
                 for label in np.unique(label_list):
                     count_dict[label] += 1
         return count_dict
@@ -57,7 +86,8 @@ class VOCDataset(Dataset):
             if self.verbose:
                 print("Loading labels of size {} for {}...".format(
                     len(labels),image_path))
-            image_path_labels = {image_path: labels}
+            image_path_labels = {'image_path': image_path,
+                                 'labels': labels}
             all_image_paths_labels.append(image_path_labels)
         return all_image_paths_labels
 
@@ -93,4 +123,7 @@ class VOCDataset(Dataset):
             'tvmonitor' :    19
         }
 
-v = VOCDataset(image_directory, label_directory, verbose=True)
+v = VOCDataset(image_directory, label_directory, multi_instance=True, verbose=True)
+v[0]
+v.multi_instance = False
+v[0]
