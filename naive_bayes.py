@@ -119,7 +119,7 @@ class NB():
                 #    print(weight_mat[i0, i1])
         smoothing = np.full((20,20), self.smoothing_constant)
         weight_mat += smoothing
-        weight_mat = weight_mat/(len(self.data)+self.smoothing_constant)
+        weight_mat = weight_mat/(len(self.data)+self.smoothing_constant*len(self.labels_dict))
         return weight_mat
             
 if __name__ == '__main__':
