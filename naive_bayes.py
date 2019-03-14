@@ -9,10 +9,11 @@ import glob
 import numpy as np
 from PIL import Image
 import xml.etree.ElementTree as ET
+np.set_printoptions(edgeitems=30, linewidth=100000)
 
 class NB():
     
-    def __init__(self, directory, split, smoothing_constant=1e-4, multi_instance=False, verbose=False):
+    def __init__(self, directory, split, smoothing_constant=1, multi_instance=False, verbose=False):
         self.directory = directory
         self.split = split
         self.smoothing_constant = smoothing_constant
@@ -96,7 +97,7 @@ class NB():
     def _get_weights(self):
         weight_mat = np.zeros((20,20))
         #print(weight_mat.shape)
-        for i in self.data:
+        for count, i in enumerate(self.data):
             labels = i['labels']
             relations = {}
             for l0 in labels:
@@ -112,11 +113,15 @@ class NB():
                             relations[(l1,l0)] = 1.0
             for key in relations.keys():
                 i0, i1 = self.labels_dict[key[0]], self.labels_dict[key[1]]
-                weight_mat[i0, i1] += 1/relations[key]
+                weight_mat[i0, i1] += 1#/relations[key]
+                #if count < 10:
+                #    print(i0,i1, relations[key])
+                #    print(weight_mat[i0, i1])
         smoothing = np.full((20,20), self.smoothing_constant)
         weight_mat += smoothing
+        weight_mat = weight_mat/(len(self.data)+self.smoothing_constant)
         return weight_mat
             
 if __name__ == '__main__':
-    nb = NB('VOC2012', 'train', multi_instance=True)
-    print(nb.weight_mat)
+    nb = NB('VOC2012', 'train', 1, multi_instance=True)
+    print(np.round(nb.weight_mat,5))
