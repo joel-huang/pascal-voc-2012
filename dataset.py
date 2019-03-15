@@ -5,10 +5,7 @@ from PIL import Image
 import xml.etree.ElementTree as ET
 
 import torch
-from torchvision import transforms
-from torch.utils.data import Dataset, DataLoader
-
-directory = 'VOC2012'
+from torch.utils.data import Dataset
 
 class VOCDataset(Dataset):
     def __init__(self, directory, split, transforms=None, multi_instance=False, verbose=False):
@@ -18,8 +15,8 @@ class VOCDataset(Dataset):
         self.transforms = transforms
         self.multi_instance = multi_instance
         self.labels_dict = self.get_labels_dict()
-        self.data = self._load_all_image_paths_labels(split)
-        self._count_classes()
+        self.label_count, self.data = self._load_all_image_paths_labels(split)
+        self.classes_count = self._count_classes()
 
     def __len__(self):
         return len(self.data)
@@ -65,12 +62,12 @@ class VOCDataset(Dataset):
         plt.show()
 
     def _count_classes(self):
-        count_dict = {x: 0 for x in self.get_labels_dict()}
+        count_dict = {x: 0 for x in self.labels_dict}
         for pairs in self.data:
             for label_list in pairs['labels']:
                 for label in np.unique(label_list):
                     count_dict[label] += 1
-        print(count_dict)
+        return count_dict
 
     def _load_image(self, image_path):
         img = Image.open(image_path)
@@ -114,7 +111,7 @@ class VOCDataset(Dataset):
 
         print("SET: {} | TOTAL IMAGES: {}".format(self.split, len(all_image_paths_labels)))
         print("SET: {} | TOTAL LABELS: {}".format(self.split, label_count))
-        return all_image_paths_labels
+        return label_count, all_image_paths_labels
 
     def _get_labels_from_xml(self, xml_path):
         labels = []
@@ -136,10 +133,3 @@ class VOCBatch:
 
 def collate_wrapper(batch):
     return VOCBatch(batch)
-
-tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
-train = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
-train_loader = DataLoader(train, batch_size=16, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
-
-for _, batch in enumerate(train_loader):
-    print(batch.image.shape, batch.labels)
