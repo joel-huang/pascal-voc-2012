@@ -123,9 +123,26 @@ class VOCDataset(Dataset):
 
 class VOCBatch:
     def __init__(self, data):
-        transposed_data = list(zip(*data))
-        self.image = torch.stack(transposed_data[0], 0)
-        self.labels = transposed_data[1]
+        self.transposed_data = list(zip(*data))
+        self.image = torch.stack(self.transposed_data[0], 0)
+        self.labels = self.construct_int_labels()
+
+    def construct_int_labels(self):
+        remap_dict = VOCDataset.get_labels_dict(None)
+        labels = self.transposed_data[1]
+        batch_size = self.image.shape[0]
+        num_classes = len(remap_dict)
+        one_hot_int_labels = torch.zeros((batch_size, num_classes))
+        for i in range(len(labels)):
+            sample_labels = labels[i]
+            one_hot = torch.zeros(num_classes)
+            sample_int_labels = []
+            for string_label in sample_labels:
+                int_label = remap_dict[string_label]
+                one_hot[int_label] = 1.
+            one_hot_int_labels[i] = one_hot
+        return one_hot_int_labels
+
     def pin_memory(self):
         self.image = self.image.pin_memory()
         self.labels = self.labels.pin_memory()
