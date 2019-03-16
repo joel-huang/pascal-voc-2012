@@ -99,11 +99,11 @@ model.fc = nn.Linear(512, 20)
 model.to(device)
 optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
-# ===================================== #
-# Use either:                           #
-# loss_function = BCEWithLogitsLoss()   #
-# loss_function = MultiLabelNBLoss(mat) #
-# ===================================== #
+# ====================================== #
+# Use either:                            #
+# loss_function = nn.BCEWithLogitsLoss() #
+# loss_function = MultiLabelNBLoss(mat)  #
+# ====================================== #
 loss_function = MultiLabelNBLoss(mat)
 
 train_losses = []
