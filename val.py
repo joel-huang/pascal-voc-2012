@@ -1,4 +1,4 @@
-import sys
+import time
 import numpy as np
 import pandas as pd
 
@@ -28,27 +28,6 @@ def print_nb_matrix(dataset, mat):
     rows = ["P({}|x)".format(key) for key in dataset.labels_dict.keys()]
     mat = pd.DataFrame(mat, columns=cols, index=rows).round(5).T
     print(mat)
-
-def train(model, device, train_loader, optimizer, epoch):
-    model.train()
-    losses = []
-    for idx, batch in enumerate(train_loader):  
-        data = batch.image.to(device)
-        target = batch.labels.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = loss_function(output, target)
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.item())
-        print('Epoch: {}, Samples: {}/{}, Loss: {}'.format(epoch, idx*batch_size,
-                                                           len(train_loader)*batch_size,
-                                                           loss.item()))
-        train_loss = torch.mean(torch.tensor(losses))
-
-    print('\nEpoch: {}'.format(epoch))
-    print('Training set: Average loss: {:.4f}'.format(train_loss))
-    return train_loss
 
 def validate(model, device, val_loader):
     model.eval()
@@ -86,37 +65,14 @@ mat = nb.get_nb_matrix()
 print_nb_matrix(nb_dataset, mat)
 mat = torch.Tensor(mat).to(device)
 
-# Define the training dataset, removing
-# multiple instances for the training problem.
-train_set = VOCDataset(directory, 'train', transforms=tr, multi_instance=False)
-train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
-
 val_set = VOCDataset(directory, 'val', transforms=tr)
 val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
 
 model = models.resnet18(pretrained=True)
 model.fc = nn.Linear(512, 20)
 model.to(device)
-optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
-# ===================================== #
-# Use either:                           #
-# loss_function = BCEWithLogitsLoss()   #
-# loss_function = MultiLabelNBLoss(mat) #
-# ===================================== #
 loss_function = MultiLabelNBLoss(mat)
 
-train_losses = []
-val_losses = []
-
-for epoch in range(1, num_epochs + 1):
-    train_loss = train(model, device, train_loader, optimizer, epoch)
-    val_loss = validate(model, device, val_loader)
-    
-    if (len(val_losses) > 0) and (val_loss < min(val_losses)):
-        torch.save(model.state_dict(), "model_{}_{:.4f}.pt".format(epoch, val_loss))
-        print("Saving model (epoch {}) with lowest validation loss: {}"
-            .format(epoch, val_loss))
-
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
+model.load_state_dict(torch.load('model.pt'))
+validate(model, device, val_loader)

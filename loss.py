@@ -65,9 +65,10 @@ class MultiLabelNBLoss(_WeightedLoss):
     """
     __constants__ = ['weight', 'reduction']
 
-    def __init__(self, weight=None, size_average=None, reduce=None, reduction='mean'):
+    def __init__(self, mat, weight=None, size_average=None, reduce=None, reduction='mean'):
         super(MultiLabelNBLoss, self).__init__(weight, size_average, reduce, reduction)
+        self.nb_mat = mat
 
     @weak_script_method
-    def forward(self, nb_mat, input, target):
-        return multilabel_nb_loss(nb_mat, input, target, weight=self.weight, reduction=self.reduction)
+    def forward(self, input, target):
+        return multilabel_nb_loss(self.nb_mat, input, target, weight=self.weight, reduction=self.reduction)
