@@ -23,13 +23,15 @@ num_epochs = 1
 learning_rate = 1e-3
 device = torch.device("cuda" if use_cuda else "cpu")
 
+torch.manual_seed(0)
+
 def print_nb_matrix(dataset, mat):
     cols = ["x={}".format(key) for key in dataset.labels_dict.keys()]
     rows = ["P({}|x)".format(key) for key in dataset.labels_dict.keys()]
     mat = pd.DataFrame(mat, columns=cols, index=rows).round(5).T
     print(mat)
 
-def train(model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, optimizer, epoch, loss_function):
     model.train()
     losses = []
     for idx, batch in enumerate(train_loader):  
@@ -50,7 +52,7 @@ def train(model, device, train_loader, optimizer, epoch):
     print('Training set: Average loss: {:.4f}'.format(train_loss))
     return train_loss
 
-def validate(model, device, val_loader):
+def validate(model, device, val_loader, loss_function):
     model.eval()
     val_loss = 0
     mAP = 0
@@ -74,49 +76,100 @@ def validate(model, device, val_loader):
     mAP /= len(val_loader)
     print('Validation set: Average loss: {:.4f}, mAP: {:.4f}'.format(
         val_loss, mAP))
-    return val_loss
+    return val_loss, mAP
 
-tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
-
-# Get the NB matrix from the dataset,
-# counting multiple instances of labels.
-nb_dataset = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
-nb = NaiveBayes(nb_dataset, 1)
-mat = nb.get_nb_matrix()
-print_nb_matrix(nb_dataset, mat)
-mat = torch.Tensor(mat).to(device)
-
-# Define the training dataset, removing
-# multiple instances for the training problem.
-train_set = VOCDataset(directory, 'train', transforms=tr, multi_instance=False)
-train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
-
-val_set = VOCDataset(directory, 'val', transforms=tr)
-val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
-
-model = models.resnet18(pretrained=True)
-model.fc = nn.Linear(512, 20)
-model.to(device)
-optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-
-# ====================================== #
-# Use either:                            #
-# loss_function = nn.BCEWithLogitsLoss() #
-# loss_function = MultiLabelNBLoss(mat)  #
-# ====================================== #
-loss_function = MultiLabelNBLoss(mat)
-
-train_losses = []
-val_losses = []
-
-for epoch in range(1, num_epochs + 1):
-    train_loss = train(model, device, train_loader, optimizer, epoch)
-    val_loss = validate(model, device, val_loader)
+def main(mode=1, num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate, model_name=None):
+    tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
     
-    if (len(val_losses) > 0) and (val_loss < min(val_losses)):
-        torch.save(model.state_dict(), "model_{}_{:.4f}.pt".format(epoch, val_loss))
-        print("Saving model (epoch {}) with lowest validation loss: {}"
-            .format(epoch, val_loss))
+    # Get the NB matrix from the dataset,
+    # counting multiple instances of labels.
+    nb_dataset = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
+    nb = NaiveBayes(nb_dataset, 1)
+    mat = nb.get_nb_matrix()
+    print_nb_matrix(nb_dataset, mat)
+    mat = torch.Tensor(mat).to(device)
+    
+    # Define the training dataset, removing
+    # multiple instances for the training problem.
+    train_set = VOCDataset(directory, 'train', transforms=tr, multi_instance=False)
+    train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=num_workers)
+    
+    val_set = VOCDataset(directory, 'val', transforms=tr)
+    val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=num_workers)
+    
+    if model_name == None:
+        model = models.resnet18(pretrained=True)
+        model.fc = nn.Linear(512, 20)
+    else:
+        try:
+            model = models.resnet18(pretrained=True)
+            model.fc = nn.Linear(512, 20)
+            model.load_state_dict(torch.load(model_name + '.pt'))
+        except:
+            model = models.resnet18(pretrained=True)
+            model.fc = nn.Linear(512, 20)
+    model.to(device)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    
+    # ====================================== #
+    # Use either:                            #
+    # loss_function = nn.BCEWithLogitsLoss() #
+    # loss_function = MultiLabelNBLoss(mat)  #
+    # ====================================== #
+    if mode == 0:
+        loss_function = nn.BCEWithLogitsLoss()
+    elif mode == 1:        
+        loss_function = MultiLabelNBLoss(mat)
+    if mode == 0:
+        mode_ = 'BCE'
+    elif mode == 1:
+        mode_ = 'NB'
+        
+    train_losses = []
+    val_losses = []
+    mAPs = []
+    
+    model_save_name = ''
+    if model_name != None:
+        curr_epoch = int(model_name.split('_')[-2])
+    else:
+        curr_epoch = 0
+    
+    try:
+        for epoch in range(1, num_epochs + 1):
+            train_loss = train(model, device, train_loader, optimizer, epoch, loss_function)
+            val_loss, mAP = validate(model, device, val_loader, loss_function)
+            
+            if (len(val_losses) > 0) and (val_loss < min(val_losses)):
+                torch.save(model.state_dict(), "lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, epoch, val_loss))
+                print("Saving model (epoch {}) with lowest validation loss: {}"
+                    .format(epoch, val_loss))
+        
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            mAPs.append(mAP)
+            torch.save(model.state_dict(), 'temp_model.pt')
+            curr_epoch += 1
+        model_save_name = "stop_lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, curr_epoch, val_losses[-1])
+        torch.save(model.state_dict(), model_save_name)
+    except KeyboardInterrupt:
+        model.load_state_dict(torch.load('temp_model.pt'))
+        model_save_name = "pause_lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, curr_epoch, val_losses[-1])
+        torch.save(model.state_dict(), model_save_name)
+        print("Saving model (epoch {}) with current validation loss: {}".format(curr_epoch, val_loss[-1]))
+    
+    if model_name == None:
+        train_history = np.array(train_losses)
+        val_history = np.array(val_losses)
+        mAP_history = np.array(mAPs)
+    else:
+        train_history = np.load('train_history_{}_{}'.format(mode_, model_name))
+        val_history = np.load('val_history_{}_{}'.format(mode_, model_name))
+        mAP_history = np.load('mAPs_history_{}_{}'.format(mode_, model_name))
+    print('Saving history')
+    np.save("train_history_{}_{}".format(mode_, model_save_name), train_history)
+    np.save("val_history_{}_{}".format(mode_, model_save_name), val_history)
+    np.save("mAP_history_{}_{}".format(mode_, model_save_name), mAP_history)
 
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
+if __name__ == '__main__': 
+    main(mode=0, num_epochs=20, num_workers=0, lr=1e-3, sc=1e-3)

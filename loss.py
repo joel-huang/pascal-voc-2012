@@ -10,7 +10,7 @@ nb_scale = 1e-2
 logsigmoid = LogSigmoid()
 
 def multilabel_nb_loss(nb_mat, input, target, weight=None, size_average=None,
-                                reduce=None, reduction='mean'):
+                                reduce=None, reduction='mean', scaling_c=nb_scale):
     # type: (Tensor, Tensor, Optional[Tensor], Optional[bool], Optional[bool], str) -> Tensor
     # multilabel_nb_loss(input, target, weight=None, size_average=None) -> Tensor
     if size_average is not None or reduce is not None:
@@ -37,7 +37,7 @@ def multilabel_nb_loss(nb_mat, input, target, weight=None, size_average=None,
             for x in class_indices:
                 for c in class_indices:
                     if not torch.equal(x, c):
-                        loss[row, x] -= nb_mat[c,x]
+                        loss[row, x] -= nb_mat[c,x]*scaling_c
 
     if weight is not None:
         loss = loss * weight
@@ -65,10 +65,11 @@ class MultiLabelNBLoss(_WeightedLoss):
     """
     __constants__ = ['weight', 'reduction']
 
-    def __init__(self, mat, weight=None, size_average=None, reduce=None, reduction='mean'):
+    def __init__(self, mat, weight=None, size_average=None, reduce=None, reduction='mean', scaling_c=nb_scale):
         super(MultiLabelNBLoss, self).__init__(weight, size_average, reduce, reduction)
         self.nb_mat = mat
+        self.scaling_c = scaling_c
 
     @weak_script_method
     def forward(self, input, target):
-        return multilabel_nb_loss(self.nb_mat, input, target, weight=self.weight, reduction=self.reduction)
+        return multilabel_nb_loss(self.nb_mat, input, target, weight=self.weight, reduction=self.reduction, scaling_c=self.scaling_c)
