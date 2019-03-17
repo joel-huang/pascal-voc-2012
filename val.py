@@ -15,6 +15,9 @@ from torchvision import transforms
 import torchvision.models as models
 
 from sklearn.metrics import average_precision_score
+from PIL import Image
+
+import matplotlib.pyplot as plt
 
 directory = 'VOC2012'
 use_cuda = 1
@@ -42,6 +45,7 @@ def validate(model, device, val_loader):
             batch_loss = loss_function(output, target)
             val_loss += batch_loss.item()
             pred = (torch.sigmoid(output).data > 0.5).float()
+            d = data.to('cpu')
             t = target.to('cpu')
             p = pred.to('cpu')
             AP = sum([average_precision_score(t[i], p[i]) for i in range(len(t))])
@@ -57,13 +61,14 @@ def validate(model, device, val_loader):
 
 tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
 
-# Get the NB matrix from the dataset,
-# counting multiple instances of labels.
-nb_dataset = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
-nb = NaiveBayes(nb_dataset, 1)
-mat = nb.get_nb_matrix()
-print_nb_matrix(nb_dataset, mat)
-mat = torch.Tensor(mat).to(device)
+# ========================================= #
+# Uncomment if using MultiLabelNBLoss(mat)  #
+# ========================================= #
+# nb_dataset = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
+# nb = NaiveBayes(nb_dataset, 1)
+# mat = nb.get_nb_matrix()
+# print_nb_matrix(nb_dataset, mat)
+# mat = torch.Tensor(mat).to(device)
 
 val_set = VOCDataset(directory, 'val', transforms=tr)
 val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
@@ -72,7 +77,12 @@ model = models.resnet18(pretrained=True)
 model.fc = nn.Linear(512, 20)
 model.to(device)
 
-loss_function = MultiLabelNBLoss(mat)
+# ====================================== #
+# Use either:                            #
+# loss_function = nn.BCEWithLogitsLoss() #
+# loss_function = MultiLabelNBLoss(mat)  #
+# ====================================== #
+loss_function = nn.BCEWithLogitsLoss()
 
-model.load_state_dict(torch.load('model.pt'))
+model.load_state_dict(torch.load('model_57_0.0959_BCE.pt'))
 validate(model, device, val_loader)
