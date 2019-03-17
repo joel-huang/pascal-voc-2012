@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from torchvision import transforms
 import torchvision.models as models
@@ -19,7 +20,7 @@ from sklearn.metrics import average_precision_score
 directory = 'VOC2012'
 use_cuda = 1
 batch_size = 32
-num_epochs = 10
+num_epochs = 100
 learning_rate = 1e-3
 device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -97,7 +98,9 @@ val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapp
 model = models.resnet18(pretrained=True)
 model.fc = nn.Linear(512, 20)
 model.to(device)
+model.load_state_dict(torch.load('model_10_0.1151_NB.pt'))
 optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+scheduler = ReduceLROnPlateau(optimizer, 'min')
 
 # ====================================== #
 # Use either:                            #
@@ -110,7 +113,7 @@ train_losses = []
 val_losses = []
 mAPs = []
 
-for epoch in range(1, num_epochs + 1):
+for epoch in range(11, num_epochs + 1):
     train_loss = train(model, device, train_loader, optimizer, epoch)
     val_loss, mAP = validate(model, device, val_loader)
     
@@ -123,9 +126,11 @@ for epoch in range(1, num_epochs + 1):
     val_losses.append(val_loss)
     mAPs.append(mAP)
 
-train_history = np.array(train_losses)
-val_history = np.array(val_losses)
-mAP_history = np.array(mAPs)
-np.save("train_history_BCE", train_history)
-np.save("val_history_BCE", val_history)
-np.save("mAP_history_BCE", mAP_history)
+    train_history = np.array(train_losses)
+    val_history = np.array(val_losses)
+    mAP_history = np.array(mAPs)
+    np.save("train_history_BCE_{}".format(epoch), train_history)
+    np.save("val_history_BCE_{}".format(epoch), val_history)
+    np.save("mAP_history_BCE_{}".format(epoch), mAP_history)
+
+    scheduler.step(val_loss)
