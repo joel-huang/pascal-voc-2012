@@ -84,6 +84,7 @@ class NB():
 
         print("SET: {} | TOTAL IMAGES: {}".format(self.split, len(all_image_paths_labels)))
         print("SET: {} | TOTAL LABELS: {}".format(self.split, label_count))
+        self.label_count = label_count
         return all_image_paths_labels
 
     def _get_labels_from_xml(self, xml_path):
@@ -113,13 +114,13 @@ class NB():
                             relations[(l1,l0)] = 1.0
             for key in relations.keys():
                 i0, i1 = self.labels_dict[key[0]], self.labels_dict[key[1]]
-                weight_mat[i0, i1] += 1#/relations[key]
+                weight_mat[i0, i1] += relations[key]/len(labels)
                 #if count < 10:
                 #    print(i0,i1, relations[key])
                 #    print(weight_mat[i0, i1])
         smoothing = np.full((20,20), self.smoothing_constant)
         weight_mat += smoothing
-        weight_mat = weight_mat/(len(self.data)+self.smoothing_constant*len(self.labels_dict))
+        weight_mat = weight_mat/(self.label_count+self.smoothing_constant*len(self.labels_dict))
         return weight_mat
             
 if __name__ == '__main__':
