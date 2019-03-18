@@ -15,6 +15,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.models as models
 
+import PIL
+
 directory = 'VOC2012'
 use_cuda = 1
 batch_size = 32
@@ -46,7 +48,6 @@ def train(model, device, train_loader, optimizer, epoch, loss_function):
                                                            len(train_loader)*batch_size,
                                                            loss.item()))
         train_loss = torch.mean(torch.tensor(losses))
-        break
 
     print('\nEpoch: {}'.format(epoch))
     print('Training set: Average loss: {:.4f}'.format(train_loss))
@@ -75,7 +76,10 @@ def validate(model, device, val_loader, loss_function):
     return val_loss, predictions
 
 def main(mode='BCE', num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate, model_name=None):
-    tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
+    tr = transforms.Compose([transforms.RandomResizedCrop(300),
+                             transforms.RandomHorizontalFlip(),
+                             transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
+                             transforms.ToTensor()])
     
     # Get the NB matrix from the dataset,
     # counting multiple instances of labels.
@@ -185,4 +189,4 @@ if __name__ == '__main__':
 6. Target model file name (optional)'''
             print(response)
     else:
-        main(mode='BCE', num_epochs=20, num_workers=4, lr=1e-3, sc=1e-3)
+        main(mode='BCE', num_epochs=20, num_workers=16, lr=1e-3, sc=1e-3)

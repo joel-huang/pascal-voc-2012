@@ -59,7 +59,7 @@ def validate(model, device, val_loader):
         val_loss, mAP))
     return val_loss
 
-tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
+tr = transforms.Compose([transforms.RandomResizedCrop(300), transforms.ToTensor()])
 
 # ========================================= #
 # Uncomment if using MultiLabelNBLoss(mat)  #
@@ -71,7 +71,7 @@ tr = transforms.Compose([transforms.CenterCrop(224), transforms.ToTensor()])
 # mat = torch.Tensor(mat).to(device)
 
 val_set = VOCDataset(directory, 'val', transforms=tr)
-val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=16)
 
 model = models.resnet18(pretrained=True)
 model.fc = nn.Linear(512, 20)
@@ -84,5 +84,5 @@ model.to(device)
 # ====================================== #
 loss_function = nn.BCEWithLogitsLoss()
 
-model.load_state_dict(torch.load('model_57_0.0959_BCE.pt'))
+model.load_state_dict(torch.load('lr0.001_sc0.001_model_BCE_20_0.1292.pt'))
 validate(model, device, val_loader)
