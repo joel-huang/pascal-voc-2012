@@ -67,8 +67,9 @@ def validate(model, device, val_loader, loss_function):
             pred = (torch.sigmoid(output).data > 0.5).float()
             t = target.to('cpu')
             p = pred.to('cpu')
-            AP = sum([average_precision_score(t[i], p[i]) for i in range(len(t))])
-            mAP += AP/len(t)
+            AP = average_precision_score(t.numpy(), p.numpy())
+            #AP = sum([average_precision_score(t[i], p[i]) for i in range(len(t))])
+            mAP += AP
 
     # divide by the number of batches of batch size
     # get the average validation over all bins
@@ -125,10 +126,16 @@ def main(mode=1, num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate
     elif mode == 1:
         mode_ = 'NB'
         
-    train_losses = []
-    val_losses = []
-    mAPs = []
-    
+    if model_name == None:
+        train_losses = []
+        val_losses = []
+        mAPs = []
+    else:
+        print('Loading history')
+        train_losses = np.load('train_history_{}_{}.npy'.format(mode_, model_name)).tolist()
+        val_losses = np.load('val_history_{}_{}.npy'.format(mode_, model_name)).tolist()
+        mAPs = np.load('mAP_history_{}_{}.npy'.format(mode_, model_name)).tolist()
+        
     model_save_name = ''
     if model_name != None:
         curr_epoch = int(model_name.split('_')[-2])
@@ -137,11 +144,11 @@ def main(mode=1, num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate
     
     try:
         for epoch in range(1, num_epochs + 1):
-            train_loss = train(model, device, train_loader, optimizer, epoch, loss_function)
+            train_loss = train(model, device, train_loader, optimizer, curr_epoch+1, loss_function)
             val_loss, mAP = validate(model, device, val_loader, loss_function)
             
             if (len(val_losses) > 0) and (val_loss < min(val_losses)):
-                torch.save(model.state_dict(), "lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, epoch, val_loss))
+                torch.save(model.state_dict(), "lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, curr_epoch+1, val_loss))
                 print("Saving model (epoch {}) with lowest validation loss: {}"
                     .format(epoch, val_loss))
         
@@ -156,20 +163,34 @@ def main(mode=1, num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate
         model.load_state_dict(torch.load('temp_model.pt'))
         model_save_name = "pause_lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode_, curr_epoch, val_losses[-1])
         torch.save(model.state_dict(), model_save_name)
-        print("Saving model (epoch {}) with current validation loss: {}".format(curr_epoch, val_loss[-1]))
+        print("Saving model (epoch {}) with current validation loss: {}".format(curr_epoch, val_losses[-1]))
     
-    if model_name == None:
-        train_history = np.array(train_losses)
-        val_history = np.array(val_losses)
-        mAP_history = np.array(mAPs)
-    else:
-        train_history = np.load('train_history_{}_{}'.format(mode_, model_name))
-        val_history = np.load('val_history_{}_{}'.format(mode_, model_name))
-        mAP_history = np.load('mAPs_history_{}_{}'.format(mode_, model_name))
+    train_history = np.array(train_losses)
+    val_history = np.array(val_losses)
+    mAP_history = np.array(mAPs)
+    
     print('Saving history')
-    np.save("train_history_{}_{}".format(mode_, model_save_name), train_history)
-    np.save("val_history_{}_{}".format(mode_, model_save_name), val_history)
-    np.save("mAP_history_{}_{}".format(mode_, model_save_name), mAP_history)
+    np.save("train_history_{}_{}".format(mode_, model_save_name[5:-3]), train_history)
+    np.save("val_history_{}_{}".format(mode_, model_save_name[5:-3]), val_history)
+    np.save("mAP_history_{}_{}".format(mode_, model_save_name[5:-3]), mAP_history)
 
-if __name__ == '__main__': 
-    main(mode=0, num_epochs=20, num_workers=0, lr=1e-3, sc=1e-3)
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        args = sys.argv[1:]
+        if len(args) == 5:
+            main(mode=int(args[0]), num_epochs=int(args[1]), num_workers=int(args[2]), 
+                 lr=float(args[3]), sc=float(args[4]))
+        elif len(args) == 6:
+            main(mode=int(args[0]), num_epochs=int(args[1]), num_workers=int(args[2]), 
+                 lr=float(args[3]), sc=float(args[4]), model_name=args[5])
+        else:
+            response = '''Wrong number of arguments, please enter the following arguments:
+1. Mode (int)
+2. Max epochs (int)
+3. Number of worker threads (int)
+4. Learning rate (float)
+5. Scaling constant (float)
+6. Target model file name (optional)'''
+            print(response)
+    else:
+        main(mode=0, num_epochs=20, num_workers=0, lr=1e-3, sc=1e-3)
