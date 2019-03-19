@@ -88,7 +88,7 @@ def validate(model, device, val_loader, loss_function):
     print('Validation set: Average loss: {:.4f}'.format(val_loss))
     return val_loss, predictions
 
-def main(mode='BCE', num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_rate, model_name=None):
+def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
     tr = transforms.Compose([transforms.RandomResizedCrop(300),
                              transforms.RandomHorizontalFlip(),
                              transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
@@ -134,7 +134,7 @@ def main(mode='BCE', num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_
     if mode == 'BCE':
         loss_function = nn.BCEWithLogitsLoss()
     elif mode == 'NB':        
-        loss_function = MultiLabelNBLoss(mat)
+        loss_function = MultiLabelNBLoss(mat, scaling_c=sc)
 
     if model_name == None:
         train_losses = []
