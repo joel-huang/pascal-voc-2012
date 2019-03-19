@@ -26,6 +26,19 @@ device = torch.device("cuda" if use_cuda else "cpu")
 
 torch.manual_seed(0)
 
+class CustomNet(nn.Module):
+
+    def __init__(self, base_net=None):
+        super().__init__()
+        self.base_net = base_net
+        self.pool = nn.AdaptiveAvgPool3d((3,224,224))
+        
+    def forward(self, x):
+        #self.base_net.eval()
+        x_mod = self.pool(x)
+        out = self.base_net(x_mod)
+        return out
+
 def print_nb_matrix(dataset, mat):
     cols = ["x={}".format(key) for key in dataset.labels_dict.keys()]
     rows = ["P({}|x)".format(key) for key in dataset.labels_dict.keys()]
@@ -100,9 +113,11 @@ def main(mode='BCE', num_epochs=1, num_workers=0, lr=learning_rate, sc=learning_
     if model_name == None:
         model = models.resnet18(pretrained=True)
         model.fc = nn.Linear(512, 20)
+        model = CustomNet(model)
     else:
         model = models.resnet18(pretrained=True)
         model.fc = nn.Linear(512, 20)
+        model = CustomNet(model)
         try:
             model.load_state_dict(torch.load(model_name + '.pt'))
         except:
