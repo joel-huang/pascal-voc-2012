@@ -13,7 +13,8 @@ from torchvision import transforms
 import torchvision.models as models
 from sklearn.metrics import average_precision_score
 
-from flask import Flask, render_template, request, g
+from flask import Flask, render_template, request
+from flask.ext.cache
 
 import matplotlib.pyplot as plt
     
