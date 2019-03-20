@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>DL Proj 1 Demo</title>
+	</head>
+	<body>
+	Choose one:
+		<form action="/">
+			<input type="submit" name='btn' value="Go Back" />
+		</form>
+		<form action='/predict_output' method='GET'>
+			File Path: <input type="text" name="file_path"><br>
+			<input type="submit" name="btn" value="Submit" >
+		</form>
+		
+	<form action="/predict" method='GET'>
+		<input type="submit" name='btn' value="Previous" />
+		<input type="submit" name='btn' value="Next" />
+	</form>
+	<div id='img_browser_predict'>
+		<img src={{img_src}}/>
+	</div>
+
+	<script>
+
+	</script>
+
+	</body>
+</html>
