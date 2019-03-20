@@ -12,7 +12,7 @@ from torchvision import transforms
 import torchvision.models as models
 from sklearn.metrics import average_precision_score
 
-from flask import Flask
+from flask import Flask, render_template, request
 
 import matplotlib.pyplot as plt
     
@@ -31,7 +31,7 @@ class CustomNet(nn.Module):
             out = self.base_net(x_mod)
         return out
 
-class App(object):
+class Backend(object):
     def __init__(self, imgs_dir='./VOC2012/JPEGImages/', pred_dir='./logs/attempt1/', models_dir='./logs/attempt1/'):
         self.imgs_dir = imgs_dir
         self.pred_dir = pred_dir
@@ -64,7 +64,7 @@ class App(object):
 
     def load_img(self, idx):
         idx = int(idx[0])
-        return self.imgs_dir + self.img_paths[idx]
+        return self.imgs_dir + self.img_paths[idx] + '.jpg'
     
     def get_prediction(self, x):
         scores = self.model(x)
@@ -179,16 +179,26 @@ def _plot_tail_acc(file_path):
 app = Flask(__name__)
 
 @app.route('/')
-def hello_world():
-    return 'Hello, World!'   
+def home():
+    return render_template('home.html')
+    
+@app.route('/predict')
+def predict():
+    return render_template('predict.html')
+    
+@app.route('/predict', methods=['GET'])
+def get_url():
+    text = request.form['file_path']
+    
+    return render_template('predict_output.html')
+    
+@app.route('/browse')
+def browse():
+    return render_template('browse.html')
     
 if __name__ == '__main__':
-    app = App()
-    scores, gt = load_scores_and_gt()
-    class_0, class_0_idx = rank_by_class(scores, 0)
-    img_rank_0 = app.val_order[class_0_idx]
-    for i in img_rank_0[:5]:
-        print(app.load_img(i))
+    backend = Backend()
+    app.run(debug=False)
     
     #_test_pickle_and_rank()
     #_plot_tail_acc('./logs/attempt2/pred_NB_40.pkl')
