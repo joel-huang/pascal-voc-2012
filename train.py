@@ -15,29 +15,18 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import torchvision.models as models
 
+from eval import get_AP
+
 import PIL
 
 directory = 'VOC2012'
 use_cuda = 1
-batch_size = 32
+batch_size = 48
 num_epochs = 1
 learning_rate = 1e-3
 device = torch.device("cuda" if use_cuda else "cpu")
 
 torch.manual_seed(0)
-
-class CustomNet(nn.Module):
-
-    def __init__(self, base_net=None):
-        super().__init__()
-        self.base_net = base_net
-        self.pool = nn.AdaptiveAvgPool3d((3,224,224))
-        
-    def forward(self, x):
-        #self.base_net.eval()
-        x_mod = self.pool(x)
-        out = self.base_net(x_mod)
-        return out
 
 def print_nb_matrix(dataset, mat):
     cols = ["x={}".format(key) for key in dataset.labels_dict.keys()]
@@ -48,7 +37,7 @@ def print_nb_matrix(dataset, mat):
 def train(model, device, train_loader, optimizer, epoch, loss_function):
     model.train()
     losses = []
-    for idx, batch in enumerate(train_loader):  
+    for idx, batch in enumerate(train_loader):
         data = batch.image.to(device)
         target = batch.labels.to(device)
         optimizer.zero_grad()
@@ -69,8 +58,6 @@ def train(model, device, train_loader, optimizer, epoch, loss_function):
 def validate(model, device, val_loader, loss_function):
     model.eval()
     val_loss = 0
-    predictions = []
-    
     with torch.no_grad():
         for idx, batch in enumerate(val_loader):
             data = batch.image.to(device)
@@ -79,21 +66,27 @@ def validate(model, device, val_loader, loss_function):
             batch_loss = loss_function(output, target)
             val_loss += batch_loss.item()
             pred = torch.sigmoid(output)
-            pred_target_pair = {'pred': pred, 'target': target}
-            predictions.append(pred_target_pair)
+            if idx == 0:
+                predictions = pred
+                targets = target
+            else:
+                predictions = torch.cat((predictions, pred))
+                targets = torch.cat((targets, target))
 
     # divide by the number of batches of batch size
     # get the average validation over all bins
     val_loss /= len(val_loader)
     print('Validation set: Average loss: {:.4f}'.format(val_loss))
-    return val_loss, predictions
+    print('                AP: {:.4f}'.format(
+        get_AP(predictions.reshape(-1, 20), targets.reshape(-1, 20))))
+    return val_loss, predictions, targets
 
 def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
     tr = transforms.Compose([transforms.RandomResizedCrop(300),
                              transforms.RandomHorizontalFlip(),
                              transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
                              transforms.ToTensor()])
-    
+
     # Get the NB matrix from the dataset,
     # counting multiple instances of labels.
     nb_dataset = VOCDataset(directory, 'train', transforms=tr, multi_instance=True)
@@ -101,65 +94,56 @@ def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
     mat = nb.get_nb_matrix()
     print_nb_matrix(nb_dataset, mat)
     mat = torch.Tensor(mat).to(device)
-    
+
     # Define the training dataset, removing
     # multiple instances for the training problem.
     train_set = VOCDataset(directory, 'train', transforms=tr, multi_instance=False)
     train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=num_workers)
-    
+
     val_set = VOCDataset(directory, 'val', transforms=tr)
     val_loader = DataLoader(val_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=num_workers)
-    
+
+    model = models.resnet34(pretrained=True)
+    model.fc = nn.Linear(512, 20)
+
     if model_name == None:
-        model = models.resnet18(pretrained=True)
-        model.fc = nn.Linear(512, 20)
-        model = CustomNet(model)
+        train_losses = []
+        val_losses = []
+        curr_epoch = 0
     else:
-        model = models.resnet18(pretrained=True)
-        model.fc = nn.Linear(512, 20)
-        model = CustomNet(model)
-        try:
-            model.load_state_dict(torch.load(model_name + '.pt'))
-        except:
-            pass
+        model.load_state_dict(torch.load(model_name + '.pt'))
+        print('Loading history')
+        train_losses = np.load('train_history_{}_{}.npy'.format(mode, model_name)).tolist()
+        val_losses = np.load('val_history_{}_{}.npy'.format(mode, model_name)).tolist()
+        curr_epoch = int(model_name.split('_')[-2])
 
     model.to(device)
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    
+
     # ====================================== #
     # Use either:                            #
     # loss_function = nn.BCEWithLogitsLoss() #
     # loss_function = MultiLabelNBLoss(mat)  #
     # ====================================== #
     if mode == 'BCE':
-        loss_function = nn.BCEWithLogitsLoss()
-    elif mode == 'NB':        
+        classwise_frequencies = np.array(list(train_set.classes_count.values()))
+        minimum_frequency = np.min(classwise_frequencies)
+        loss_weights = minimum_frequency / classwise_frequencies
+        loss_weights = torch.Tensor(loss_weights).to(device)
+        loss_function = nn.BCEWithLogitsLoss(weight=loss_weights)
+    elif mode == 'NB':
         loss_function = MultiLabelNBLoss(mat, scaling_c=sc)
 
-    if model_name == None:
-        train_losses = []
-        val_losses = []
-    else:
-        print('Loading history')
-        train_losses = np.load('train_history_{}_{}.npy'.format(mode, model_name)).tolist()
-        val_losses = np.load('val_history_{}_{}.npy'.format(mode, model_name)).tolist()
-        
-    model_save_name = ''
-    if model_name != None:
-        curr_epoch = int(model_name.split('_')[-2])
-    else:
-        curr_epoch = 0
-    
     try:
         for epoch in range(1, num_epochs + 1):
             train_loss = train(model, device, train_loader, optimizer, curr_epoch+1, loss_function)
-            val_loss, predictions = validate(model, device, val_loader, loss_function)
+            val_loss, predictions, targets = validate(model, device, val_loader, loss_function)
 
             print("Saving raw predictions for epoch {}...".format(curr_epoch+1))
-
             with open("pred_{}_{}.pkl".format(mode, curr_epoch+1), 'wb') as f:
-                pickle.dump(predictions, f)
-            
+                pred_targets = torch.cat((predictions.unsqueeze(0), targets.unsqueeze(0)))
+                pickle.dump(pred_targets, f)
+
             if (len(val_losses) > 0) and (val_loss < min(val_losses)):
                 torch.save(model.state_dict(), "lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode, curr_epoch+1, val_loss))
                 print("Saving model (epoch {}) with lowest validation loss: {}"
@@ -169,6 +153,7 @@ def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
             val_losses.append(val_loss)
             torch.save(model.state_dict(), 'temp_model.pt')
             curr_epoch += 1
+
         model_save_name = "stop_lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode, curr_epoch, val_losses[-1])
         torch.save(model.state_dict(), model_save_name)
 
@@ -177,10 +162,10 @@ def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
         model_save_name = "pause_lr{}_sc{}_model_{}_{}_{:.4f}.pt".format(lr, sc, mode, curr_epoch, val_losses[-1])
         torch.save(model.state_dict(), model_save_name)
         print("Saving model (epoch {}) with current validation loss: {}".format(curr_epoch, val_losses[-1]))
-    
+
     train_history = np.array(train_losses)
     val_history = np.array(val_losses)
-    
+
     print('Saving history')
     np.save("train_history_{}_{}".format(mode, model_save_name[5:-3]), train_history)
     np.save("val_history_{}_{}".format(mode, model_save_name[5:-3]), val_history)
@@ -189,10 +174,10 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         args = sys.argv[1:]
         if len(args) == 5:
-            main(mode=args[0], num_epochs=int(args[1]), num_workers=int(args[2]), 
+            main(mode=args[0], num_epochs=int(args[1]), num_workers=int(args[2]),
                     lr=float(args[3]), sc=float(args[4]))
         elif len(args) == 6:
-            main(mode=args[0], num_epochs=int(args[1]), num_workers=int(args[2]), 
+            main(mode=args[0], num_epochs=int(args[1]), num_workers=int(args[2]),
                     lr=float(args[3]), sc=float(args[4]), model_name=args[5])
         else:
             response = '''Wrong number of arguments, please enter the following arguments:
@@ -204,4 +189,4 @@ if __name__ == '__main__':
 6. Target model file name (optional)'''
             print(response)
     else:
-        main(mode='BCE', num_epochs=20, num_workers=16, lr=1e-3, sc=1e-3)
+        main(mode='BCE', num_epochs=40, num_workers=16, lr=1e-3, sc=1e-3)
