@@ -605,6 +605,7 @@ def _plot_tail_acc(file_path):
     plt.ylabel('Tailaccs')
     plt.xlabel('t value')
     plt.show()
+    plt.savefig('{}_tail.png'.format(file_path), format='png', bbox_inches='tight')
     
 if __name__ == "__main__":
     if len(sys.argv) == 4:

@@ -24,8 +24,6 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 directory = 'VOC2012'
 use_cuda = 1
 batch_size = 48
-num_epochs = 1
-learning_rate = 1e-3
 device = torch.device("cuda" if use_cuda else "cpu")
 
 torch.manual_seed(0)
@@ -85,11 +83,13 @@ def validate(model, device, val_loader, loss_function):
 
 def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
     tr = transforms.Compose([transforms.RandomResizedCrop(300),
-                             transforms.RandomHorizontalFlip(),
-                             transforms.RandomVerticalFlip(),
-                             transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
                              transforms.ToTensor(),
-                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
+                             transforms.Normalize([0.4589, 0.4355, 0.4032],[0.2239, 0.2186, 0.2206])])
+
+    augs = transforms.Compose([transforms.RandomResizedCrop(300),
+                               transforms.RandomRotation(20),
+                               transforms.ToTensor(),
+                               transforms.Normalize([0.4589, 0.4355, 0.4032],[0.2239, 0.2186, 0.2206])])
 
     # Get the NB matrix from the dataset,
     # counting multiple instances of labels.
@@ -101,7 +101,7 @@ def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
 
     # Define the training dataset, removing
     # multiple instances for the training problem.
-    train_set = VOCDataset(directory, 'train', transforms=tr, multi_instance=False)
+    train_set = VOCDataset(directory, 'train', transforms=augs, multi_instance=False)
     train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_wrapper, shuffle=True, num_workers=num_workers)
 
     val_set = VOCDataset(directory, 'val', transforms=tr)
@@ -122,7 +122,8 @@ def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
         curr_epoch = int(model_name.split('_')[-2])
 
     model.to(device)
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    print('Starting optimizer with LR={}'.format(lr))
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
     # ====================================== #
     # Use either:                            #
@@ -193,4 +194,4 @@ if __name__ == '__main__':
 6. Target model file name (optional)'''
             print(response)
     else:
-        main(mode='BCE', num_epochs=40, num_workers=16, lr=1e-3, sc=1e-3)
+        main(mode='BCE', num_epochs=50, num_workers=16, lr=1e-3, sc=1e-3)
