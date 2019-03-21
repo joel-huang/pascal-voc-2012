@@ -611,7 +611,7 @@ def _plot_tail_acc(file_path):
     plt.show()
     
 if __name__ == "__main__":
-    if len(sys.argv) > 4:
+    if len(sys.argv) == 4:
         pickle_file_path = sys.argv[1]
         app = App(sys.argv[2], sys.argv[3])
     else:
