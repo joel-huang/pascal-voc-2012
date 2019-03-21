@@ -1,3 +1,4 @@
 VOC2012
 __pycache__
 *.pt
+!stop_lr0.005_sc0.001_model_BCE_50_0.0437.pt

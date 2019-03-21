@@ -36,7 +36,7 @@ def validate(model, device, val_loader):
     model.eval()
     val_loss = 0
     mAP = 0
-    
+
     with torch.no_grad():
         for idx, batch in enumerate(val_loader):
             data = batch.image.to(device)
