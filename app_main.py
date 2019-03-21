@@ -568,7 +568,7 @@ def get_tail_acc(sorted_scores, sorted_gt, t_min, t_max, t_num):
         tail_acc = 0
         if tp+fp > 0:
             tail_acc = tp/(tp+fp)
-        #print(t_val, tp, fp)
+        print(t_val, tp, fp)
         tail_accs.append(tail_acc)
         
     return tail_accs
@@ -607,12 +607,18 @@ def _plot_tail_acc(file_path):
     plt.show()
     
 if __name__ == "__main__":
+    #_plot_tail_acc('logs/stop_lr0.01_sc0.001_model_BCE_50_0.0324_validation.pkl')
+    #_plot_tail_acc('logs/attempt7/validation.pkl')
+    
     if len(sys.argv) == 4:
         pickle_file_path = sys.argv[1]
         app = App(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 2:
+        pickle_file_path = sys.argv[1]
+        app = App('VOC2012/JPEGImages/', 'logs/attempt7/')
     else:
         pickle_file_path = 'logs/attempt7/validation.pkl'
-        app = App()
+        app = App('VOC2012/JPEGImages/', 'logs/attempt7/')
     predict_tab = PredictTab(app)
     app.add_new_tab(predict_tab, "Predict Single Image")
     browse_tab = BrowseTab(app)
