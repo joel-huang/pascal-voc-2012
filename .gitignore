@@ -1,2 +1,3 @@
 VOC2012
 __pycache__
+*.pt
