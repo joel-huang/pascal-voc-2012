@@ -42,7 +42,6 @@ class Backend(object):
         self.models_dir = models_dir
         self.model = self._load_default_model()
         self.img_paths = self._load_img_paths()
-        self.val_order = self._load_val_order()
         self.labels_dict = self.get_labels_dict()
         self.predict_img_counter = 0
         
@@ -73,9 +72,6 @@ class Backend(object):
     def _load_default_model(self):
         return self.load_model('stop_lr0.005_sc0.001_model_BCE_50_0.0437')
     
-    def _load_val_order(self):
-        return np.load('logs/val_order.npy')
-        
     def _load_img_paths(self):    
         image_paths = []
         image_path_file = 'VOC2012/ImageSets/Main/val.txt' 
@@ -355,7 +351,7 @@ class ClassSelectFrame(Frame):
         self.next_page_button.grid(row = 0, column = 2, padx = 10)
         
         self.sorted_by = Label(self,
-                               text = 'Now viewing: '+self.classes[browse_tab.browse_frame.cls])
+                               text = 'Now Viewing: '+self.classes[browse_tab.browse_frame.cls])
         self.sorted_by.pack(side=TOP,pady=10)
         
         self.cls_nav = Frame(self)
@@ -379,7 +375,7 @@ class ClassSelectFrame(Frame):
                                    int(self.num_images/self.page_size)+1,
                                    self.page_size*(page-1)+1,
                                    min(self.page_size*page,self.num_images)))
-        self.sorted_by.config(text = 'Sorted by: '+self.classes[browse_tab.browse_frame.cls])
+        self.sorted_by.config(text = 'Now Viewing: '+self.classes[browse_tab.browse_frame.cls])
     
 class ImageFrame(Frame):
     
