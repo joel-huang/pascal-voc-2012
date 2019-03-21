@@ -36,7 +36,7 @@ class CustomNet(nn.Module):
         return out
 
 class Backend(object):
-    def __init__(self, imgs_dir='VOC2012/JPEGImages/', pred_dir='logs/attempt7/', models_dir='logs/attempt7/'):
+    def __init__(self, imgs_dir='VOC2012/JPEGImages/', pred_dir='logs/final/', models_dir='logs/final/'):
         self.imgs_dir = imgs_dir
         self.pred_dir = pred_dir
         self.models_dir = models_dir
@@ -70,7 +70,7 @@ class Backend(object):
         }
         
     def _load_default_model(self):
-        return self.load_model('stop_lr0.005_sc0.001_model_BCE_50_0.0437')
+        return self.load_model('final_model')
     
     def _load_img_paths(self):    
         image_paths = []
@@ -608,18 +608,16 @@ def _plot_tail_acc(file_path):
     plt.savefig('{}_tail.png'.format(file_path), format='png', bbox_inches='tight')
     
 if __name__ == "__main__":
-    #_plot_tail_acc('logs/stop_lr0.01_sc0.001_model_BCE_50_0.0324_validation.pkl')
-    #_plot_tail_acc('logs/attempt7/validation.pkl')
     
     if len(sys.argv) == 4:
         pickle_file_path = sys.argv[1]
         app = App(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 2:
         pickle_file_path = sys.argv[1]
-        app = App('VOC2012/JPEGImages/', 'logs/attempt7/')
+        app = App('VOC2012/JPEGImages/', 'logs/final/')
     else:
-        pickle_file_path = 'logs/attempt7/validation.pkl'
-        app = App('VOC2012/JPEGImages/', 'logs/attempt7/')
+        pickle_file_path = 'logs/final/final_model_validation.pkl'
+        app = App('VOC2012/JPEGImages/', 'logs/final/')
     predict_tab = PredictTab(app)
     app.add_new_tab(predict_tab, "Predict Single Image")
     browse_tab = BrowseTab(app)
