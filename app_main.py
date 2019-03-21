@@ -106,7 +106,6 @@ class Backend(object):
             if score > 0.5:
                 output.append(self.labels_dict[i])
         return scores.cpu().numpy(), output
-
                 
     def get_prediction(self, x):
         scores = self.model(x)
@@ -120,7 +119,7 @@ class Backend(object):
         return preds
         
 class App(Tk):
-    def __init__(self):
+    def __init__(self, imgs_dir='VOC2012/JPEGImages/', logs_dir='logs/attempt7/'):
         super().__init__()
 
         default_font = font.nametofont("TkDefaultFont")
@@ -133,7 +132,7 @@ class App(Tk):
         self.notebook = Notebook(self)
 
         self.notebook.pack(fill=BOTH, expand=1)
-        self.backend = Backend()
+        self.backend = Backend(imgs_dir, logs_dir)
 
     def add_new_tab(self, tab, name):
         self.tabs.append(tab)
@@ -449,7 +448,7 @@ class ScrollFrame(Frame):
         self.classes = parent.classes
         self.cls = 0
         
-        self.val_scores, self.gt = load_scores_and_gt()
+        self.val_scores, self.gt = load_scores_and_gt(pickle_file_path)
         self.sorted_preds, self.sorted_img_idxs = [], []
         for i in range(20):
             preds, img_idxs = rank_by_class(self.val_scores, i)
@@ -578,15 +577,6 @@ def get_tail_acc(sorted_scores, sorted_gt, t_min, t_max, t_num):
         
     return tail_accs
     
-def get_mAP(scores, gt):
-    mAP = 0
-    for i in range(scores.shape[0]):
-        pred = np.array([1 if scores[i,j] > 0.5 else 0 for j in range(scores.shape[1])])
-        AP = average_precision_score(pred, gt[i])
-        mAP += AP
-    mAP /= scores.shape[0]
-    return mAP
-    
 def _test_tail_acc():
     pickled = load_pickle()
     scores, gt = get_preds_and_gt(pickled, 'numpy')
@@ -621,7 +611,12 @@ def _plot_tail_acc(file_path):
     plt.show()
     
 if __name__ == "__main__":
-    app = App()
+    if len(sys.argv) > 4:
+        pickle_file_path = sys.argv[1]
+        app = App(sys.argv[2], sys.argv[3])
+    else:
+        pickle_file_path = 'logs/attempt7/validation.pkl'
+        app = App()
     predict_tab = PredictTab(app)
     app.add_new_tab(predict_tab, "Predict Single Image")
     browse_tab = BrowseTab(app)
