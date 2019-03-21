@@ -19,6 +19,8 @@ from eval import get_AP
 
 import PIL
 
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 directory = 'VOC2012'
 use_cuda = 1
 batch_size = 48
@@ -84,8 +86,10 @@ def validate(model, device, val_loader, loss_function):
 def main(mode, num_epochs, num_workers, lr, sc, model_name=None):
     tr = transforms.Compose([transforms.RandomResizedCrop(300),
                              transforms.RandomHorizontalFlip(),
+                             transforms.RandomVerticalFlip(),
                              transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
-                             transforms.ToTensor()])
+                             transforms.ToTensor(),
+                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
 
     # Get the NB matrix from the dataset,
     # counting multiple instances of labels.

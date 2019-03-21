@@ -1,0 +1,12 @@
+mode='BCE'
+weighted with min(freq)/freq
+batch_size = 48
+num_epochs=50
+num_workers=16
+lr=5e-3
+tr = transforms.Compose([transforms.RandomResizedCrop(300),
+                             transforms.RandomHorizontalFlip(),
+                             transforms.RandomVerticalFlip(),
+                             transforms.RandomRotation(20, resample=PIL.Image.BILINEAR),
+                             transforms.ToTensor(),
+                             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
