@@ -36,7 +36,7 @@ class CustomNet(nn.Module):
         return out
 
 class Backend(object):
-    def __init__(self, imgs_dir='VOC2012/JPEGImages/', pred_dir='logs/attempt1/', models_dir='logs/attempt1/'):
+    def __init__(self, imgs_dir='VOC2012/JPEGImages/', pred_dir='logs/attempt7/', models_dir='logs/attempt7/'):
         self.imgs_dir = imgs_dir
         self.pred_dir = pred_dir
         self.models_dir = models_dir
@@ -71,7 +71,7 @@ class Backend(object):
         }
         
     def _load_default_model(self):
-        return self.load_model('stop_lr0.001_sc0.001_model_BCE_40_0.1131')
+        return self.load_model('stop_lr0.005_sc0.001_model_BCE_50_0.0437')
     
     def _load_val_order(self):
         return np.load('logs/val_order.npy')
@@ -86,7 +86,7 @@ class Backend(object):
         return image_paths
     
     def load_model(self, model_name):
-        model = models.resnet18(pretrained=True)
+        model = models.resnet34(pretrained=True)
         model.fc = nn.Linear(512, 20)
         model.load_state_dict(torch.load(self.models_dir + model_name + '.pt'))
         model = CustomNet(model)
@@ -143,8 +143,7 @@ class App(Tk):
     def add_new_tab(self, tab, name):
         self.tabs.append(tab)
         self.notebook.add(tab, text=name)
-        
-        
+             
 class PredictTab(Frame):
     
     def __init__(self,app):
@@ -306,10 +305,10 @@ class BrowseTab(Frame):
         self.classes = self.backend.labels_dict
         
         self.browse_frame = ScrollFrame(self)
-        self.browse_frame.pack(side=TOP, fill=BOTH, expand=1)
+        self.browse_frame.pack(side=BOTTOM, fill=BOTH, expand=1)
         
         self.cls_select_frame = ClassSelectFrame(self)
-        self.cls_select_frame.pack(side=BOTTOM, fill=X)
+        self.cls_select_frame.pack(side=TOP, fill=X)
         
     def class_select(self, cls):
         self.browse_frame.change_class(cls)
@@ -362,7 +361,7 @@ class ClassSelectFrame(Frame):
         self.next_page_button.grid(row = 0, column = 2, padx = 10)
         
         self.sorted_by = Label(self,
-                               text = 'Sorted by: '+self.classes[browse_tab.browse_frame.cls])
+                               text = 'Now viewing: '+self.classes[browse_tab.browse_frame.cls])
         self.sorted_by.pack(side=TOP,pady=10)
         
         self.cls_nav = Frame(self)
@@ -497,11 +496,10 @@ class ScrollFrame(Frame):
         self.canvas.create_window((4,4), window=self.viewPort, anchor="nw",            #add view port frame to canvas
                                   tags="self.viewPort")
 
-        self.viewPort.bind("<Configure>", self.on_frame_config)                       #bind an event whenever the size of the viewPort frame changes.
+        self.viewPort.bind("<Configure>", self.on_frame_config)                       
 
-    def on_frame_config(self, event):                                              
-        '''Reset the scroll region to encompass the inner frame'''
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))                 #whenever the size of the frame changes, alter the scroll region respectively.
+    def on_frame_config(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))                
         
     def goto_page(self, pg):
         last_cell = min(len(self.image_list),len(self.image_names)-(pg-1)*self.page_size)
