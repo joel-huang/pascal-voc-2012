@@ -2,7 +2,6 @@ import sys, os
 import numpy as np
 import scipy as sp
 import pickle
-from PIL import Image
 
 import torch
 import torch.nn as nn
@@ -13,9 +12,12 @@ from torchvision import transforms
 import torchvision.models as models
 from sklearn.metrics import average_precision_score
 
-from flask import Flask, render_template, request
-from flask.ext.cache
 
+from tkinter import *
+from tkinter import font
+from tkinter import filedialog
+from tkinter.ttk import *
+from PIL import Image, ImageTk
 import matplotlib.pyplot as plt
     
 torch.manual_seed(0)
@@ -120,6 +122,420 @@ class Backend(object):
     def main(self):
         pass
         
+class App(Tk):
+    def __init__(self):
+        super().__init__()
+
+        default_font = font.nametofont("TkDefaultFont")
+        default_font.configure(size=10)
+
+        self.title("Deep Learning Mini Project")
+        self.geometry("1024x576")
+        self.tabs = []        
+        
+        self.notebook = Notebook(self)
+
+        self.notebook.pack(fill=BOTH, expand=1)
+        self.backend = Backend()
+        #self.img_names_file = os.path.join(
+        #        'data/VOCdevkit/VOC2012/ImageSets/Main/val.txt')
+
+    def add_new_tab(self, tab, name):
+        self.tabs.append(tab)
+        self.notebook.add(tab, text=name)
+        
+        
+class PredictTab(Frame):
+    
+    def __init__(self,app):
+        super().__init__(app)
+        
+        self.classes = app.backend.labels_dict
+        self.backend = app.backend
+        centre = Frame(self)
+        centre.pack()
+        centre.classes = self.classes
+        
+        image_frame = Frame(centre)
+        image_frame.config(border = 5, relief = RAISED)
+        image_frame.pack(side=LEFT,fill=BOTH,padx=20,pady=20)
+        
+        self.image_holder = Label(image_frame)
+        
+        self.choose_img_button = Button(image_frame, 
+                                        text="Choose Image",
+                                        command=self.predict_image)
+        self.choose_img_button.pack(side=BOTTOM,padx=20,pady=20)
+                
+        self.results_frame = ResultsFrame(centre)
+        self.results_frame.config(border = 5, relief = RAISED)
+        
+        device_name = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = torch.device(device_name)
+        self.model = app.backend.model
+        self.model.to(self.device)
+        
+        self.transform = transforms.Compose([transforms.Resize(224),
+                                transforms.CenterCrop(224),
+                                transforms.ToTensor()])
+        
+    def get_image(self):
+        
+        path = filedialog.askopenfilename(filetypes=[("Image File",'*')])
+        
+        image_name = path[path.rfind('/')+1:]
+        
+        if path != '':
+            img = Image.open(path).convert('RGB')
+        else:
+            img = None
+            
+        return img, image_name
+
+    def display_image(self, img):
+        img_w,img_h = img.size
+        limit = 400
+        if img_w >= img_h:
+            resized_image = img.resize((limit,int(img_h*limit/img_w)),
+                                             Image.ANTIALIAS)
+        else:
+            resized_image = img.resize((int(img_w*limit/img_h),limit),
+                                             Image.ANTIALIAS)
+        tkimage = ImageTk.PhotoImage(resized_image)
+        self.image_holder.image = tkimage
+        self.image_holder.config(image=tkimage)
+
+    def get_pred(self, img):
+        
+        self.model.eval()
+        threshold = 0.5
+        
+        with torch.no_grad():
+            data = self.transform(img).to(self.device)
+            scores = torch.sigmoid(self.model(data.unsqueeze(0))).squeeze(0).tolist()
+            prediction = []
+            for i in range(len(scores)):
+                if scores[i] >= threshold:
+                    prediction.append(self.classes[i])
+                    
+        return prediction, scores
+    
+    def predict_image(self):
+        img = self.get_image()
+        if img[0] != None:
+            self.display_image(img[0])
+            self.results_frame.loading(img[1])
+            
+            prediction, scores = self.get_pred(img[0])
+            
+            self.image_holder.pack(side=TOP,padx=20,pady=20)
+            self.results_frame.pack(side=RIGHT,fill=BOTH,padx=20,pady=20)
+            self.results_frame.display_results(prediction, scores)
+        
+class ResultsFrame(Frame):
+    def __init__(self,predict_tab):
+        super().__init__(predict_tab)
+        
+        self.classes = predict_tab.classes
+        
+        centre_frame = Frame(self)
+        centre_frame.pack(fill=BOTH)
+        
+        pred_title = Label(centre_frame,
+                           text = 'Prediction Results')
+        pred_title.grid(row = 0, column = 0, padx = 10, pady = 10)
+        
+        self.image_name = Label(centre_frame,
+                            text = '(No image selected)')
+        self.image_name.grid(row = 1, column = 0, padx = 10, pady = 10)
+        
+        self.pred_result = Label(centre_frame,
+                            text = '(No image selected)')
+        self.pred_result.grid(row = 2, column = 0, padx = 10, pady = 10)
+        
+        score_grid = Frame(centre_frame)
+        score_grid.grid(row = 3, column = 0, padx = 10, pady = 10)
+        
+        self.score_list = []
+        num_cols = 4
+        for i in range(len(self.classes)):
+            
+            class_score_frame = Frame(score_grid)
+            class_score_frame.config(border = 5, relief = SUNKEN)
+            class_score_frame.grid(row = int(i/num_cols),
+                                   column = int(i%num_cols),
+                                   sticky=N+S+E+W)
+            
+            class_name = Label(class_score_frame,
+                               text = self.classes[i])
+            class_name.pack(side = TOP)
+            
+            self.score_list.append(Label(class_score_frame))
+            self.score_list[i].pack(side = TOP)
+            
+    def loading(self, image_name):
+        self.pred_result.config(text = 'Loading...')
+        for score in self.score_list:
+            score.config(text = '...')
+        
+        if len(image_name) <= 50:
+            self.image_name.config(text = image_name)
+        else:
+            name = image_name.split('/')[-1]
+            truncated_name = ' ... '.join(name)#.join([image_name[:39], image_name[-7:]])
+            self.image_name.config(text = truncated_name)
+                   
+    def display_results(self, prediction, scores):
+        
+        if len(prediction) == 0:
+            prediction_text = 'Prediction: None'
+        else:
+            prediction_text = 'Prediction: ' + ', '.join(prediction)
+        self.pred_result.config(text = prediction_text)
+        
+        for i in range(len(self.score_list)):
+            self.score_list[i].config(text = str(round(scores[i],5)))    
+ 
+class BrowseTab(Frame):
+    
+    def __init__(self, app):
+        super().__init__(app)
+        
+        self.backend = app.backend
+        self.img_paths = self.backend.img_paths
+        self.classes = self.backend.labels_dict
+        
+        self.browse_frame = ScrollFrame(self)
+        self.browse_frame.pack(side=TOP, fill=BOTH, expand=1)
+        
+        self.cls_select_frame = ClassSelectFrame(self)
+        self.cls_select_frame.pack(side=BOTTOM, fill=X)
+        
+    def class_select(self, cls):
+        self.browse_frame.change_class(cls)
+        self.cls_select_frame.change_page(self.browse_frame.page_number)
+        
+    def prev_page(self):
+        if self.browse_frame.page_number > 1:
+            self.browse_frame.prev_page()
+            self.cls_select_frame.change_page(self.browse_frame.page_number)
+        else:
+            self.cls_select_frame.change_page(self.browse_frame.page_limit)
+        
+    def next_page(self):
+        if self.browse_frame.page_number < self.browse_frame.page_limit:
+            self.browse_frame.next_page()
+            self.cls_select_frame.change_page(self.browse_frame.page_number)
+        else:
+            self.cls_select_frame.change_page(1)
+    
+class ClassSelectFrame(Frame):
+    
+    def __init__(self, browse_tab):
+        super().__init__(browse_tab)
+        
+        self.classes = browse_tab.classes
+        self.img_dir = browse_tab.backend.imgs_dir
+        
+        self.page_nav = Frame(self)
+        self.page_nav.pack(side=TOP,pady=10)
+        
+        self.prev_page_button = Button(self.page_nav,
+                                command = lambda:browse_tab.prev_page(),
+                                text = '<')
+        self.prev_page_button.grid(row = 0, column = 0, padx = 10)
+        
+        page = browse_tab.browse_frame.page_number
+        self.num_images = len(browse_tab.browse_frame.image_names)
+        self.page_size = browse_tab.browse_frame.page_size
+        self.image_range = Label(self.page_nav,
+                                 text = 'Page {} of {} - Images {} to {}'
+                                 .format(page,
+                                    int(self.num_images/self.page_size)+1,
+                                    self.page_size*(page-1)+1,
+                                    min(self.page_size*page,self.num_images)))
+        self.image_range.grid(row = 0, column = 1, padx = 10)
+        
+        self.next_page_button = Button(self.page_nav,
+                                command = lambda:browse_tab.next_page(),
+                                text = '>')
+        self.next_page_button.grid(row = 0, column = 2, padx = 10)
+        
+        self.sorted_by = Label(self,
+                               text = 'Sorted by: '+self.classes[browse_tab.browse_frame.cls])
+        self.sorted_by.pack(side=TOP,pady=10)
+        
+        self.cls_nav = Frame(self)
+        self.cls_nav.pack(side=BOTTOM)
+        
+        cls_rows = 2
+        cls_cols = len(self.classes)/cls_rows
+        for i in range(len(self.classes)):
+                        
+            class_button = Button(self.cls_nav,
+                             command = lambda idx = i: browse_tab.class_select(idx),
+                             text = self.classes[i])
+
+            class_button.grid(
+                    row=int(i/cls_cols),
+                    column=int(i%cls_cols))
+
+    def change_page(self, page):
+        self.image_range.config(text = 'Page {} of {} - Images {} to {}'
+                                .format(page,
+                                   int(self.num_images/self.page_size)+1,
+                                   self.page_size*(page-1)+1,
+                                   min(self.page_size*page,self.num_images)))
+        self.sorted_by.config(text = 'Sorted by: '+self.classes[browse_tab.browse_frame.cls])
+    
+class ImageFrame(Frame):
+    
+    def __init__(self,frame):
+        super().__init__(frame)
+        
+        self.img_dir = 'VOC2012/JPEGImages/'
+        self.img_names_file = frame.img_names_file
+        
+        self.text_holder = Frame(self)
+        self.text_holder.grid(row=0,
+                              column=1,
+                              sticky = N+S+E+W,
+                              padx = 20)
+        
+        self.rank = Label(self.text_holder)
+        self.rank.config(anchor=W)
+        self.rank.grid(row=0,column=0,sticky=E+W,padx=5,pady=5)
+        
+        self.title = Label(self.text_holder)
+        self.title.config(anchor=W)
+        self.title.grid(row=1,column=0,sticky=E+W,padx=5,pady=5)
+        
+        self.img = Label(self)
+        self.img.grid(row=0,column=0,sticky = N+S+E+W)
+        
+        self.score = Label(self.text_holder)
+        self.score.config(anchor=W)
+        self.score.grid(row=2,column=0,sticky=E+W,padx=5,pady=5)
+        
+        self.prediction = Label(self.text_holder)
+        self.prediction.config(anchor=W)
+        self.prediction.grid(row=3,column=0,sticky=E+W,padx=5,pady=5)
+        
+    def change(self,idx,title,score,prediction):
+        
+        self.rank.config(text = 'Rank '+str(idx+1))
+        self.title.config(text = 'Image: '+title)
+        
+        img_path = os.path.join(self.img_dir,
+                                    title+'.jpg')
+        pil_image = Image.open(img_path)
+        img_w,img_h = pil_image.size
+        limit = 360
+        if img_w >= img_h:
+            resized_image = pil_image.resize((limit,int(img_h*limit/img_w)),
+                                             Image.ANTIALIAS)
+        else:
+            resized_image = pil_image.resize((int(img_w*limit/img_h),limit),
+                                             Image.ANTIALIAS)
+        self.img.image = ImageTk.PhotoImage(resized_image)
+        self.img.config(image = self.img.image)
+        
+        self.score.config(text = 'Score: ' + str(score))
+        
+        self.prediction.config(text = 'Prediction: ' + ', '.join(prediction))
+        
+class ScrollFrame(Frame):
+    def __init__(self, parent):
+        super().__init__(parent) # create a frame (self)
+
+        self.backend = parent.backend
+        self.img_names_file = parent.backend.img_paths
+        self.image_names = parent.backend.img_paths
+            
+        self.classes = parent.classes
+        self.cls = 0
+        
+        device_name = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = torch.device(device_name)
+        self.val_scores, self.gt = load_scores_and_gt()
+        self.sorted_preds, self.sorted_img_idxs = [], []
+        for i in range(20):
+            preds, img_idxs = rank_by_class(self.val_scores, i)
+            self.sorted_preds.append(preds.tolist())
+            self.sorted_img_idxs.append(img_idxs.tolist())
+        self.sorted_preds = np.array(self.sorted_preds)
+        self.sorted_img_idxs = np.array(self.sorted_img_idxs)
+        
+        self.canvas = Canvas(self, borderwidth=0, background="#ffffff")
+
+        self.viewPort = Frame(self.canvas)
+        self.viewPort.img_names_file = self.img_names_file
+        self.viewPort.pack(fill=BOTH,expand=True)
+        
+        self.page_number = 1
+        
+        self.page_size = 20
+        self.page_limit = int(len(self.image_names)/self.page_size)+1
+        
+        self.cols = 5
+        
+        self.image_list = []
+        
+        for i in range(self.page_size):
+            
+            self.image_list.append(ImageFrame(self.viewPort))
+            self.image_list[i].config(border=10,relief=SUNKEN)
+            self.image_list[i].pack(side=TOP,fill=BOTH,expand=True)
+            
+        self.goto_page(self.page_number)
+            
+        self.vsb = Scrollbar(self, orient="vertical", command=self.canvas.yview) #place a scrollbar on self 
+        self.canvas.configure(yscrollcommand=self.vsb.set)                          #attach scrollbar action to scroll of canvas
+
+        self.vsb.pack(side="right", fill="y")                                       #pack scrollbar to right of self
+        self.canvas.pack(side=LEFT, fill=BOTH, expand=True)                     #pack canvas to left of self and expand to fil
+        self.canvas.create_window((4,4), window=self.viewPort, anchor="nw",            #add view port frame to canvas
+                                  tags="self.viewPort")
+
+        self.viewPort.bind("<Configure>", self.on_frame_config)                       #bind an event whenever the size of the viewPort frame changes.
+
+    def on_frame_config(self, event):                                              
+        '''Reset the scroll region to encompass the inner frame'''
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))                 #whenever the size of the frame changes, alter the scroll region respectively.
+        
+    def goto_page(self, pg):
+        last_cell = min(len(self.image_list),len(self.image_names)-(pg-1)*self.page_size)
+        for i in range(len(self.image_list)):
+            if i < last_cell:
+                img_idx = (pg-1)*self.page_size+i
+                true_img_idx = self.sorted_img_idxs[self.cls,img_idx]
+                print(true_img_idx, self.backend.val_order[true_img_idx][0])
+                title = self.image_names[int(self.backend.val_order[true_img_idx][0])]
+                score = self.sorted_preds[self.cls,true_img_idx,self.cls]
+                print(score)
+                preds = self.sorted_preds[self.cls,true_img_idx,:]
+                prediction = []
+                for k in range(20):
+                    if preds[k] > 0.5:
+                        prediction.append(self.classes[k])
+                self.image_list[i].change(img_idx,title,score,prediction)
+                self.image_list[i].pack()
+            else:
+                self.image_list[i].grid_remove()
+        
+    def next_page(self):
+        self.page_number += 1
+        self.goto_page(self.page_number)
+        
+    def prev_page(self):
+        self.page_number -= 1
+        self.goto_page(self.page_number)
+        
+    def change_class(self,cls):
+        self.page_number = 1
+        self.cls = cls
+        self.goto_page(self.page_number)
+    
 def load_pickle(file_path='logs/attempt1/pred_BCE_40.pkl'):
     with open(file_path, 'rb') as f:
         ret = pickle.load(f)
@@ -217,12 +633,24 @@ def _plot_tail_acc(file_path):
     plt.xlabel('t value')
     plt.show()
     
+if __name__ == "__main__":
+    
+    app = App()
+    predict_tab = PredictTab(app)
+    app.add_new_tab(predict_tab,"Predict on a Single Image")
+    browse_tab = BrowseTab(app)
+    app.add_new_tab(browse_tab,"Browse Top-ranked Predictions")
+    
+    app.mainloop()
+
+    
+"""    
 class MyFlask(Flask):
     def __init__(self, name, **kwargs):
         super().__init__(name, static_folder=kwargs['static_folder'], static_url_path=kwargs['static_url_path'])
         self.predict_img_counter = 0
 
-app = MyFlask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='.', static_url_path='')
 backend = Backend()
 predict_img_counter = 0
 max_img_counter = backend.val_order.shape[0]
@@ -230,14 +658,19 @@ max_img_counter = backend.val_order.shape[0]
 @app.route('/')
 def home():
     return render_template('home.html')
+    
+@app.route('/', methods=['GET'])
+def home_buttons():
+    btn_val = request.form['btn']
+    if btn_val == 'Get prediction for single image':
+        file_path = backend.load_img(0)
+        return render_template('predict.html', img_src=file_path, img_num=0)
+    else:
+        return render_template('browse.html')
   
 @app.route('/predict', methods=['GET'])
 def predict():
-    try:
-        btn_val = request.form['btn']
-    except:
-        file_path = backend.load_img(app.predict_img_counter)
-        return render_template('predict.html', img_src=file_path)
+    btn_val = request.form['btn']
     if btn_val == 'Next':
         app.predict_img_counter += 1
         app.predict_img_counter %= max_img_counter
@@ -265,4 +698,4 @@ if __name__ == '__main__':
     
     #_plot_tail_acc('logs/attempt1/pred_BCE_40.pkl')
     #_plot_tail_acc('logs/attempt2/pred_NB_40.pkl')
-        
+"""        
