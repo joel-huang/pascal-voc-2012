@@ -605,6 +605,7 @@ def _plot_tail_acc(file_path):
     plt.ylabel('Tailaccs')
     plt.xlabel('t value')
     plt.show()
+    plt.savefig('{}_tail.png'.format(file_path), format='png', bbox_inches='tight')
     
 if __name__ == "__main__":
     #_plot_tail_acc('logs/stop_lr0.01_sc0.001_model_BCE_50_0.0324_validation.pkl')
